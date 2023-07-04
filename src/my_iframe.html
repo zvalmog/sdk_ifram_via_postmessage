@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+
+<head></head>
+
+<body>
+    <script>
+        async function sha256(source) {
+            const sourceBytes = new TextEncoder().encode(source);
+            const digest = await crypto.subtle.digest("SHA-256", sourceBytes);
+            const resultBytes = [...new Uint8Array(digest)];
+            return resultBytes.map(x => x.toString(16).padStart(2, '0')).join("");
+        }
+
+        // simulate user login event on iframe load, then a purchase 3 seconds after that
+        const listener = window.addEventListener(
+            'message',
+            (event) => {
+
+                // is the sender sender of this message who we expect it to be? 
+                // check assumes we share an origin (no CORS)
+                if (event.origin !== window.origin) return;
+
+                if ('PING' == event.data.eventType) {
+                    console.log('2. iframe received PING, sending PONG');
+
+                    // we use the event source to reply, meaning the iframe need not know the
+                    // host window hierarchy ahead of time.
+                    event.source.postMessage(
+                        { eventType: 'PONG' },
+
+                        // note we're following the above idiom to demonstrate how it will
+                        // still work when using different origins.
+                        event.origin
+                    );
+
+                    // we do not expect further messages from the host
+                    window.removeEventListener('message', listener);
+
+                    // start iframe driven session simulation
+                    sha256('user@example.com')
+                        .then(hashedID => {
+                            console.log('4. iframe sending IDENTIFY');
+                            event.source.postMessage(
+                                { eventType: 'IDENTIFY', cuid: hashedID },
+                                event.origin
+                            );
+                        })
+                        .then(
+                            setTimeout(() => {
+                                console.log('6. iframe sending EVENT');
+                                event.source.postMessage(
+                                    { eventType: 'EVENT', eventName: 'purchase', eventRevenue: 12, eventValue: { "key1": 123, "key2": "name" } },
+                                    event.origin
+                                );
+                            }, 3000)
+                        );
+                } else {
+                    console.error('unknown message');
+                }
+            },
+            false);
+    </script>
+</body>
+
+</html>

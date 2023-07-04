@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <script>
+        // LOAD PBA SDK as instructed in The Native tab of 
+        // https://support.appsflyer.com/hc/en-us/articles/360001610038-PBA-Web-SDK-integration-guide#installation-and-integration
+        !function (t, e, n, s, a, c, i, o, p) {
+            t.AppsFlyerSdkObject = a, t.AF = t.AF || function () {
+                (t.AF.q = t.AF.q || []).push([Date.now()].concat(Array.prototype.slice.call(arguments)))
+            },
+                t.AF.id = t.AF.id || i, t.AF.plugins = {}, o = e.createElement(n), p = e.getElementsByTagName(n)[0], o.async = 1,
+                o.src = "https://websdk.appsflyer.com?" + (c.length > 0 ? "st=" + c.split(",").sort().join(",") + "&" : "") + (i.length > 0 ? "af_id=" + i : ""),
+                p.parentNode.insertBefore(o, p)
+            // Don't LOAD PBA until the iframe loads so event timing better reflects reality, use your <DEV_KEY> value
+            // see https://support.appsflyer.com/hc/en-us/articles/360001610038-PBA-Web-SDK-integration-guide#sending-events-optinoptout
+        }(window, document, "script", 0, "AF", "pba", { pba: { measurementStatus: false, webAppId: "MY_IFRAME_WEB_DEV_KEY" } });
+    </script>
+</head>
+
+<body>
+    <iframe src='./src/my_iframe.html' height='200' width='300' id='my_iframe'
+        onload="iframeLoaded()"></iframe>
+    <script>
+
+        // set up listener for iframe events
+        window.addEventListener(
+            'message',
+            (event) => {
+                // is the sender sender of this message who we expect it to be? check assumes we share an origin (no CORS)
+                if (event.origin !== window.origin) return;
+
+                // my_iframe will send 'PONG' once initialized then only post EVENTs 
+                // (https://support.appsflyer.com/hc/en-us/articles/360001610038-PBA-Web-SDK-integration-guide#conversion-and-standard-events)
+                // or call 'setCustomerUserId' (https://support.appsflyer.com/hc/en-us/articles/360001610038-PBA-Web-SDK-integration-guide#identifying-users-using-customer-user-id-cuid)
+                // AKA send an IDENTIFY event.
+                const message = event.data;
+                switch (message.eventType) {
+                    case 'PONG':
+                        AF('pba', 'enableMeasurement');
+                        console.log('3. Host received PONG');
+                        break;
+                    case 'IDENTIFY':
+                        AF('pba', 'setCustomerUserId', message.cuid);
+                        console.log('5. Host received IDENTIFY');
+                        break;
+                    case 'EVENT':
+                        AF('pba', 'event', message);
+                        console.log('7. Host received EVENT');
+                        break;
+
+                    default:
+                        console.error('unknown message');
+                        break;
+                }
+            },
+            false);
+        
+        // start communicating when the iframe fully loads
+        function iframeLoaded() {
+            console.log('1. Host sending PING');
+
+            // note we use structured messages for coherence
+            document.getElementById("my_iframe").contentWindow.postMessage({ eventType: 'PING' }, window.origin);
+        }
+
+    </script>
+</body>
+
+</html>
